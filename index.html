@@ -14,11 +14,12 @@
       #pages:target, #posts:target { display: block; }
 
       .page { padding: 1em; display: flex; align-items: center; }
+      .page + .page { border-top: 1px solid #ddd; }
       .page:hover { background: #eee; }
       .page-name { padding-left: 1em; }
 
       .post { padding: 1em; display: flex; }
-      .post:nth-child(even) { background: #eee; }
+      .post + .post { border-top: 1px solid #ddd; }
       .post.available { background: lightgreen; padding-left: 1em; }
       .post-text { max-height: 2.3em; padding-left: 1em; overflow: hidden; text-overflow: ellipsis; }
       .post-author { color: #999; }
