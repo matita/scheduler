@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: Helvetica, Arial, sans-serif; color: #444; }
+      .main { padding: 1em; max-width: 700px; margin-left: auto; margin-right: auto; }
+      #pages, #posts { display: none; }
+      #pages:target, #posts:target { display: block; }
+
+      .page { padding: 1em; display: flex; align-items: center; }
+      .page:hover { background: #eee; }
+      .page-name { padding-left: 1em; }
+
+      .post { padding: 1em; display: flex; }
+      .post:nth-child(even) { background: #eee; }
+      .post.available { background: lightgreen; padding-left: 1em; }
+      .post-text { max-height: 2.3em; padding-left: 1em; overflow: hidden; text-overflow: ellipsis; }
+      .post-author { color: #999; }
+      .post-opener { display: none; }
+      .post-opener:checked + .post-text { max-height: 9999em; }
+    </style>
+  </head>
+  <body>
+    <div class="main">
+      <div id="login">
+        <h2>Entra con il tuo account Facebook per vedere i post programmati</h2>
+        <p>
+          <fb:login-button scope="public_profile,manage_pages" onlogin="checkLoginState();">
+          </fb:login-button>
+        </p>
+        <p id="message"></p>
+      </div>
+
+      <div id="pages"></div>
+      <div id="posts"></div>
+    </div>
+
+    <script>
+      var state = {
+        page: null,
+        pages: {},
+        posts: []
+      };
+
+
+      function statusChangeCallback(response) {
+        console.log('status', response);
+        if (response.status == 'connected') {
+          document.getElementById('login').style.display = 'none';
+          getPages();
+        } else if (response.status == 'not_authorized') {
+          askToLogInApp();
+        } else {
+          askToLogToFacebook();
+        }
+      }
+
+
+      function askToLogInApp() {
+        document.getElementById('message').innerHTML = 'Please log in to app';
+      }
+
+      function askToLogToFacebook() {
+        document.getElementById('message').innerHTML = 'Please log in to Facebook';
+      }
+
+      function getPages() {
+        window.location = '#pages';
+        document.getElementById('message').innerHTML = 'Welcome! Fetching your information...';
+        FB.api('/me/accounts', function(response) {
+          var pages = response.data;
+          console.log('pages', pages);
+          document.getElementById('pages').innerHTML = 
+            '<h2>Quale pagina vuoi usare?</h2>' +
+            pages
+              .sort(function (p1, p2) { return p1.name.toLowerCase().localeCompare(p2.name.toLowerCase()); })
+              .map(function (page) {
+                state.pages[page.id] = page;
+                return '<div class="page" data-page-id="' + page.id + '">' +
+                  '<image class="page-picture" src="//graph.facebook.com/' + page.id + '/picture" style="width:50px;height:50px">' +
+                  '<div class="page-name">' + page.name + '</div>' +
+                '</div>'
+              }).join('') || 'No page found';
+          document.getElementById('message').innerHTML = 'Thanks for logging in, ' + response.name + '!';
+        });
+      }
+
+      document.querySelector('#pages').addEventListener('click', function(e) {
+        var target = e.target;
+        while (target) {
+          if (target.matches('.page'))
+            break;
+          target = e.target.parentNode;
+        }
+
+        var pageId = target.dataset.pageId;
+        getScheduledPosts(pageId);
+      }, false);
+
+
+      function getScheduledPosts(pageId) {
+        var page = state.pages[pageId];
+        var params = { 
+          fields: 'scheduled_publish_time,admin_creator,message,picture',
+          limit: 100,
+          is_published: false
+        };
+        state.page = page;
+        window.location = '#posts';
+        
+        if (page)
+          params.access_token = page.access_token;
+
+
+        state.posts = [];
+
+        FB.api(
+          '/' + pageId + '/promotable_posts',
+          params, 
+          receivedPosts);
+      }
+
+      function receivedPosts(response) {
+        var posts = response.data;
+        console.log('posts', posts);
+        state.posts = state.posts.concat(posts).sort(function (p1, p2) { return p1.scheduled_publish_time - p2.scheduled_publish_time; });
+        renderPosts();
+
+        if (posts.length && response.paging.next)
+          FB.api(response.paging.next, receivedPosts);
+      }
+
+      function renderPosts() {
+        var posts = state.posts;
+        var lastDate;
+
+        document.getElementById('posts').innerHTML = 
+          (state.page ? '<h1>' + state.page.name + '</h1>' : '') +
+          '<h2>Post programmati: ' + posts.length + '</h2>' +
+              posts
+              .map(function (post, i, posts) {
+                var scheduledDate = new Date(post.scheduled_publish_time * 1000);
+                var labelDate = formatDate(scheduledDate);
+                var creator = post.admin_creator;
+                var dateH = '';
+                var availableTime = '';
+
+                if (labelDate !== lastDate) {
+                  dateH = '<h3>' + labelDate + '</h3>';
+                  lastDate = labelDate;
+                }
+
+                if (i > 0 && posts[i-1].scheduled_publish_time < post.scheduled_publish_time - 60*60)
+                  availableTime = '<div class="post available">Disponibile per pubblicazione</div>';
+
+                return dateH + 
+                  availableTime + 
+                  '<div class="post">' + 
+                    '<div class="post-time">' + formatTime(scheduledDate) + '</div>' +
+                    '<input class="post-opener" type="checkbox" id="post-' + post.id + '">' +
+                    '<div class="post-text">' + 
+                      '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
+                      '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>' +
+                    '</div>' +
+                  '</div>';
+              }).join('') || 'No scheduled posts';
+      }
+
+
+      function formatDate(date) {
+        return date.getDate() + '/' + (date.getMonth() + 1) + '/' + date.getFullYear();
+      }
+
+      function formatTime(date) {
+        return pad(date.getHours()) + ':' + pad(date.getMinutes());
+      }
+
+      function pad(num) {
+        return ('0' + num).substr(-2);
+      }
+
+
+      function checkLoginState() {
+        FB.getLoginStatus(function (response) {
+          statusChangeCallback(response);
+        });
+      }
+
+
+      window.fbAsyncInit = function() {
+        FB.init({
+          appId      : '317751075269036',
+          xfbml      : true,
+          version    : 'v2.8'
+        });
+
+        //checkLoginState();
+      };
+
+      (function(d, s, id){
+         var js, fjs = d.getElementsByTagName(s)[0];
+         if (d.getElementById(id)) {return;}
+         js = d.createElement(s); js.id = id;
+         js.src = "//connect.facebook.net/en_US/sdk.js";
+         fjs.parentNode.insertBefore(js, fjs);
+       }(document, 'script', 'facebook-jssdk'));
+    </script>
+  </body>
+</html>
