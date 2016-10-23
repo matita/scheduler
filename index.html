@@ -13,6 +13,8 @@
       #pages, #posts { display: none; }
       #pages:target, #posts:target { display: block; }
 
+      .login-container { text-align: center; }
+
       .page { padding: 1em; display: flex; align-items: center; }
       .page + .page { border-top: 1px solid #ddd; }
       .page:hover { background: #eee; }
@@ -21,7 +23,8 @@
       .current-page-name { position: fixed; top: 0; width: 100%; max-width: 700px; background: #fff; padding-top: 0.67em; padding-bottom: 0.67em; margin: 0; }
       #posts { padding-top: 3em; }
 
-      .post { padding: 1em; display: flex; }
+      th { text-align: left; padding-top: 1em; }
+      .post { padding: 1em; }
       .post + .post { border-top: 1px solid #ddd; }
       .post.available { background: lightgreen; padding-left: 1em; }
       .post-text { max-height: 2.3em; padding-left: 1em; overflow: hidden; text-overflow: ellipsis; }
@@ -34,8 +37,9 @@
     <div class="main">
       <div id="login">
         <h2>Entra con il tuo account Facebook per vedere i post programmati</h2>
-        <p>
-          <fb:login-button scope="public_profile,manage_pages" onlogin="checkLoginState();">
+        <p class="login-container">
+          <span id="wait-for-fb">Caricamento pulsante...</span>
+          <fb:login-button scope="public_profile,manage_pages" onlogin="checkLoginState();" data-size="xlarge">
           </fb:login-button>
         </p>
         <p id="message"></p>
@@ -143,6 +147,7 @@
 
         document.getElementById('posts').innerHTML = 
           (state.page ? '<h1 class="current-page-name">' + state.page.name + ' (' + state.posts.length + ') <button class="refresh-posts" data-page-id="' + state.page.id + '">Ricarica</button></h1>' : '') +
+              '<table><tbody>' +
               posts
               .map(function (post, i, posts) {
                 var scheduledDate = new Date(post.scheduled_publish_time * 1000);
@@ -152,24 +157,27 @@
                 var availableTime = '';
 
                 if (labelDate !== lastDate) {
-                  dateH = '<h3>' + labelDate + '</h3>';
+                  dateH = '<tr><th colspan="2">' + labelDate + '</th></tr>';
                   lastDate = labelDate;
                 }
 
                 if (i > 0 && posts[i-1].scheduled_publish_time < post.scheduled_publish_time - 60*60)
-                  availableTime = '<div class="post available">Disponibile per pubblicazione</div>';
+                  availableTime = '<tr><td class="post available" colspan="2">Disponibile per pubblicazione</td></tr>';
 
                 return dateH + 
                   availableTime + 
-                  '<div class="post">' + 
-                    '<div class="post-time">' + formatTime(scheduledDate) + '</div>' +
-                    '<input class="post-opener" type="checkbox" id="post-' + post.id + '">' +
-                    '<div class="post-text">' + 
-                      '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
-                      '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>' +
-                    '</div>' +
-                  '</div>';
-              }).join('') || 'No scheduled posts';
+                  '<tr class="post">' + 
+                    '<td class="post-time">' + formatTime(scheduledDate) + '</td>' +
+                    '<td>' +
+                      '<input class="post-opener" type="checkbox" id="post-' + post.id + '">' +
+                      '<div class="post-text">' + 
+                        '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
+                        '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>' +
+                      '</div>' +
+                    '</td>'
+                  '</tr>';
+              }).join('') || 'No scheduled posts' +
+              '</tbody></table>';
         
         var title = document.querySelector('.current-page-name');
         if (title) {
@@ -195,6 +203,8 @@
         el.addEventListener(eventName, function(e) {
           var target = e.target;
           while (target) {
+            if (!target.matches)
+              return;
             if (target.matches(delegate))
               break;
             target = target.parentNode;
@@ -226,6 +236,8 @@
 
 
       window.fbAsyncInit = function() {
+        document.getElementById('wait-for-fb').style.display = 'none';
+
         var appId = '317751075269036';
         var localAppId = '320008228376654';
 
