@@ -18,6 +18,9 @@
       .page:hover { background: #eee; }
       .page-name { padding-left: 1em; }
 
+      .current-page-name { position: fixed; top: 0; width: 100%; max-width: 700px; background: #fff; padding-top: 0.67em; padding-bottom: 0.67em; margin: 0; }
+      #posts { padding-top: 3em; }
+
       .post { padding: 1em; display: flex; }
       .post + .post { border-top: 1px solid #ddd; }
       .post.available { background: lightgreen; padding-left: 1em; }
@@ -92,17 +95,11 @@
         });
       }
 
-      document.querySelector('#pages').addEventListener('click', function(e) {
-        var target = e.target;
-        while (target) {
-          if (target.matches('.page'))
-            break;
-          target = e.target.parentNode;
-        }
-
+      addListener(document.body, 'click', '[data-page-id]', function(e) {
+        var target = this;
         var pageId = target.dataset.pageId;
         getScheduledPosts(pageId);
-      }, false);
+      });
 
 
       function getScheduledPosts(pageId) {
@@ -113,12 +110,13 @@
           is_published: false
         };
         state.page = page;
-        window.location = '#posts';
-        
         if (page)
           params.access_token = page.access_token;
 
 
+        if (location.hash != '#posts')
+          window.location = '#posts';
+        disableBtns(document.querySelectorAll('button[data-page-id="' + pageId + '"]'));
         state.posts = [];
 
         FB.api(
@@ -135,6 +133,8 @@
 
         if (posts.length && response.paging.next)
           FB.api(response.paging.next, receivedPosts);
+        else
+          enableBtns(document.querySelectorAll('button[data-page-id="' + state.page.id + '"]'));
       }
 
       function renderPosts() {
@@ -142,8 +142,7 @@
         var lastDate;
 
         document.getElementById('posts').innerHTML = 
-          (state.page ? '<h1>' + state.page.name + '</h1>' : '') +
-          '<h2>Post programmati: ' + posts.length + '</h2>' +
+          (state.page ? '<h1 class="current-page-name">' + state.page.name + ' (' + state.posts.length + ') <button class="refresh-posts" data-page-id="' + state.page.id + '">Ricarica</button></h1>' : '') +
               posts
               .map(function (post, i, posts) {
                 var scheduledDate = new Date(post.scheduled_publish_time * 1000);
@@ -171,6 +170,12 @@
                     '</div>' +
                   '</div>';
               }).join('') || 'No scheduled posts';
+        
+        var title = document.querySelector('.current-page-name');
+        if (title) {
+          var titleH = title.offsetHeight;
+          document.querySelector('#posts').style.paddingTop = (titleH + 10) + 'px';
+        }
       }
 
 
@@ -186,6 +191,32 @@
         return ('0' + num).substr(-2);
       }
 
+      function addListener(el, eventName, delegate, callback) {
+        el.addEventListener(eventName, function(e) {
+          var target = e.target;
+          while (target) {
+            if (target.matches(delegate))
+              break;
+            target = target.parentNode;
+          }
+
+          if (!target)
+            return;
+
+          callback.call(target, e);
+        }, false);
+      }
+
+      function disableBtns(buttons) {
+        for (var i = 0; i < buttons.length; i++)
+          buttons[i].disabled = true;
+      }
+
+      function enableBtns(buttons) {
+        for (var i = 0; i < buttons.length; i++)
+          buttons[i].disabled = false;
+      }
+
 
       function checkLoginState() {
         FB.getLoginStatus(function (response) {
@@ -195,8 +226,11 @@
 
 
       window.fbAsyncInit = function() {
+        var appId = '317751075269036';
+        var localAppId = '320008228376654';
+
         FB.init({
-          appId      : '317751075269036',
+          appId      : location.hostname == 'localhost' ? localAppId : appId,
           xfbml      : true,
           version    : 'v2.8'
         });
