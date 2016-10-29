@@ -23,14 +23,17 @@
       .current-page-name { position: fixed; top: 0; width: 100%; max-width: 700px; background: #fff; padding-top: 0.67em; padding-bottom: 0.67em; margin: 0; }
       #posts { padding-top: 3em; }
 
-      th { text-align: left; padding-top: 1em; }
-      .post { padding: 1em; }
-      .post + .post { border-top: 1px solid #ddd; }
+      .posts { width: 100%; border-collapse: collapse; }
+      .posts th { text-align: left; font-size: 1.7em; padding-top: 1em; padding-bottom: .5em; }
+      .post > td { padding: 1em; border-top: 1px solid #eee; }
       .post.available { background: lightgreen; padding-left: 1em; }
-      .post-text { max-height: 2.3em; padding-left: 1em; overflow: hidden; text-overflow: ellipsis; }
+      .post.overlaps > .post-time { color: red; }
+      .post-text { width: 100%; }
+      .post-text-content { max-height: 2.3em; overflow: hidden; text-overflow: ellipsis; }
+      .post-picture { float: left; max-width: 40px; max-height: 40px; margin-right: 10px; margin-bottom: 10px; }
       .post-author { color: #999; }
       .post-opener { display: none; }
-      .post-opener:checked + .post-text { max-height: 9999em; }
+      .post-opener:checked + .post-text-content { max-height: 9999em; }
     </style>
   </head>
   <body>
@@ -53,7 +56,9 @@
       var state = {
         page: null,
         pages: {},
-        posts: []
+        posts: [],
+        firstHour: 8,
+        lastHour: 22
       };
 
 
@@ -132,7 +137,11 @@
       function receivedPosts(response) {
         var posts = response.data;
         console.log('posts', posts);
-        state.posts = state.posts.concat(posts).sort(function (p1, p2) { return p1.scheduled_publish_time - p2.scheduled_publish_time; });
+        state.posts = state.posts
+          .concat(posts)
+          .sort(function (p1, p2) { 
+            return p1.scheduled_publish_time - p2.scheduled_publish_time; 
+          });
         renderPosts();
 
         if (posts.length && response.paging.next)
@@ -144,35 +153,48 @@
       function renderPosts() {
         var posts = state.posts;
         var lastDate;
+        var scheduledSlots = getScheduledSlots(posts);
+        var fromDate = new Date();
+        fromDate.setHours(fromDate.getHours() + 1);
+        var toDate = getLastDate(posts);
+        var availableSlots = getAvailableSlots(fromDate, toDate, scheduledSlots);
+        var allSlots = posts
+          .concat(availableSlots)
+          .sort(function(s1, s2) { 
+            return s1.scheduled_publish_time - s2.scheduled_publish_time ||
+              (s1.id < s2.id ? -1 :
+                s1.id > s2.id ? 1 :
+                0); 
+          });
+
 
         document.getElementById('posts').innerHTML = 
           (state.page ? '<h1 class="current-page-name">' + state.page.name + ' (' + state.posts.length + ') <button class="refresh-posts" data-page-id="' + state.page.id + '">Ricarica</button></h1>' : '') +
-              '<table><tbody>' +
-              posts
+              '<table class="posts"><tbody>' +
+              allSlots
               .map(function (post, i, posts) {
                 var scheduledDate = new Date(post.scheduled_publish_time * 1000);
                 var labelDate = formatDate(scheduledDate);
                 var creator = post.admin_creator;
                 var dateH = '';
-                var availableTime = '';
+                var isAvailable = !post.id;
 
                 if (labelDate !== lastDate) {
                   dateH = '<tr><th colspan="2">' + labelDate + '</th></tr>';
                   lastDate = labelDate;
                 }
 
-                if (i > 0 && posts[i-1].scheduled_publish_time < post.scheduled_publish_time - 60*60)
-                  availableTime = '<tr><td class="post available" colspan="2">Disponibile per pubblicazione</td></tr>';
-
                 return dateH + 
-                  availableTime + 
-                  '<tr class="post">' + 
+                  '<tr class="post' + (isAvailable ? ' available' : '') + (post.overlaps ? ' overlaps' : '') + '">' + 
                     '<td class="post-time">' + formatTime(scheduledDate) + '</td>' +
-                    '<td>' +
+                    '<td class="post-text">' +
                       '<input class="post-opener" type="checkbox" id="post-' + post.id + '">' +
-                      '<div class="post-text">' + 
-                        '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
-                        '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>' +
+                      '<div class="post-text-content">' + 
+                        (isAvailable ? 'Disponibile per pubblicazione' : 
+                          (post.picture ? '<img class="post-picture" src="' + post.picture + '">' : '') +
+                          '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
+                          '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>'
+                        ) +
                       '</div>' +
                     '</td>'
                   '</tr>';
@@ -186,6 +208,66 @@
         }
       }
 
+
+      function getAvailableSlots(fromDate, toDate, scheduledSlots) {
+        var slots = [];
+        for (var cursorDate = truncDate(fromDate); cursorDate.getTime() < toDate.getTime(); cursorDate.setHours(cursorDate.getHours() + 1)) {
+          if (cursorDate.getHours() < state.firstHour) {
+            cursorDate.setHours(state.firstHour);
+          } else if (cursorDate.getHours() > state.lastHour) {
+            cursorDate.setDate(cursorDate.getDate() + 1);
+            cursorDate.setHours(state.firstHour - 1);
+            continue;
+          }
+
+          var index = getDateSlot(cursorDate);
+          var isBusy = scheduledSlots.hasOwnProperty(index);
+          if (!isBusy)
+            slots.push({ scheduled_publish_time: Math.round(cursorDate.getTime() / 1000) });
+        }
+        return slots;
+      }
+
+      function getScheduledSlots(posts) {
+        return posts.reduce(function(slots, post) {
+          var index = getDateSlot(new Date(post.scheduled_publish_time * 1000));
+          var overlaps = slots.hasOwnProperty(index);
+          if (overlaps)
+            slots[index].overlaps = overlaps;
+          post.overlaps = overlaps;
+          slots[index] = post;
+          return slots;
+        }, {});
+      }
+
+      function getLastDate(posts) {
+        var lastDate = new Date();
+        lastDate.setDate(lastDate.getDate() + 5);
+
+        var dates = posts.map(function (post) { return post.scheduled_publish_time; });
+        if (dates.length) {
+          var lastPostTime = Math.max.apply(Math, dates);
+          var lastPostDate = new Date(lastPostTime * 1000);
+          if (lastPostDate.getTime() > lastDate.getTime())
+            lastDate = lastPostDate;
+        }
+        
+        return lastDate;
+      }
+
+
+      function getDateSlot(date) {
+        var truncated = truncDate(date);
+        return formatDate(truncated) + ' ' + formatTime(truncated);
+      }
+
+      function truncDate(date) {
+        var truncated = new Date(date);
+        truncated.setMinutes(0);
+        truncated.setSeconds(0);
+        truncated.setMilliseconds(0);
+        return truncated;
+      }
 
       function formatDate(date) {
         return date.getDate() + '/' + (date.getMonth() + 1) + '/' + date.getFullYear();
