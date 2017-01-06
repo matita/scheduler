@@ -58,12 +58,26 @@
         pages: {},
         posts: [],
         firstHour: 8,
-        lastHour: 22
+        lastHour: 22,
+        lastDate: new Date()
+      };
+
+
+      window.onscroll = function () {
+        if (!state.page)
+          return;
+
+        var totalHeight = document.body.offsetHeight;
+        var viewportHeight = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+        var scrollY = window.scrollY;
+        var threshold = viewportHeight;
+        var upperBound = totalHeight - viewportHeight - threshold;
+        if (scrollY > upperBound)
+          renderPosts();
       };
 
 
       function statusChangeCallback(response) {
-        console.log('status', response);
         if (response.status == 'connected') {
           document.getElementById('login').style.display = 'none';
           getPages();
@@ -88,7 +102,6 @@
         document.getElementById('message').innerHTML = 'Welcome! Fetching your information...';
         FB.api('/me/accounts', function(response) {
           var pages = response.data;
-          console.log('pages', pages);
           document.getElementById('pages').innerHTML = 
             '<h2>Quale pagina vuoi usare?</h2>' +
             pages
@@ -136,7 +149,6 @@
 
       function receivedPosts(response) {
         var posts = response.data;
-        console.log('posts', posts);
         state.posts = state.posts
           .concat(posts)
           .sort(function (p1, p2) { 
@@ -241,7 +253,7 @@
       }
 
       function getLastDate(posts) {
-        var lastDate = new Date();
+        var lastDate = state.lastDate;
         lastDate.setDate(lastDate.getDate() + 5);
 
         var dates = posts.map(function (post) { return post.scheduled_publish_time; });
