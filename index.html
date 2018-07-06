@@ -42,8 +42,14 @@
         <h2>Entra con il tuo account Facebook per vedere i post programmati</h2>
         <p class="login-container">
           <span id="wait-for-fb">Caricamento pulsante...</span>
-          <fb:login-button scope="public_profile,manage_pages" onlogin="checkLoginState();" data-size="xlarge">
-          </fb:login-button>
+          <div class="fb-login-button" 
+            data-max-rows="1" 
+            data-size="large" 
+            data-button-type="continue_with" 
+            data-show-faces="false" 
+            data-auto-logout-link="false" 
+            data-use-continue-as="true"
+            data-onlogin="statusChangeCallback"></div>
         </p>
         <p id="message"></p>
       </div>
@@ -328,29 +334,31 @@
         });
       }
 
+      var appId = '317751075269036';
+      var localAppId = '320008228376654';
+      var fbAppId = location.hostname == 'localhost' ? localAppId : appId;
 
       window.fbAsyncInit = function() {
         document.getElementById('wait-for-fb').style.display = 'none';
 
-        var appId = '317751075269036';
-        var localAppId = '320008228376654';
+        
 
         FB.init({
-          appId      : location.hostname == 'localhost' ? localAppId : appId,
+          appId      : fbAppId,
           xfbml      : true,
-          version    : 'v2.8'
+          version    : 'v3.0'
         });
 
         //checkLoginState();
       };
-
-      (function(d, s, id){
-         var js, fjs = d.getElementsByTagName(s)[0];
-         if (d.getElementById(id)) {return;}
-         js = d.createElement(s); js.id = id;
-         js.src = "//connect.facebook.net/en_US/sdk.js";
-         fjs.parentNode.insertBefore(js, fjs);
-       }(document, 'script', 'facebook-jssdk'));
     </script>
+    <div id="fb-root"></div>
+    <script>(function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
+      js = d.createElement(s); js.id = id;
+      js.src = 'https://connect.facebook.net/it_IT/sdk.js#xfbml=1&version=v3.0&appId=' + fbAppId + '&autoLogAppEvents=1';
+      fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));</script>
   </body>
 </html>
