@@ -50,7 +50,8 @@
             data-use-continue-as="true"
             data-show-faces="false" 
             data-auto-logout-link="false" 
-            data-onlogin="statusChangeCallback"></div>
+            data-onlogin="statusChangeCallback"
+            data-scope="manage_pages"></div>
         </p>
         <p id="message"></p>
       </div>
@@ -155,6 +156,8 @@
       }
 
       function receivedPosts(response) {
+        if (response.error)
+          return console.error(response.error)
         var posts = response.data;
         state.posts = state.posts
           .concat(posts)
