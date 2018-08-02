@@ -187,8 +187,15 @@
       }
 
       function receivedPosts(response) {
-        if (response.error)
+        if (response.error) {
+          document.getElementById('posts').innerHTML = [
+            '<pre>Error: ',
+            (response.error.message ? response.error.message : 'unknown'),
+            '</pre>'
+          ].join('')
           return console.error(response.error)
+        }
+
         var posts = response.data;
         state.posts = state.posts
           .concat(posts)
