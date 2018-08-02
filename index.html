@@ -85,7 +85,6 @@
 
 
       function statusChangeCallback(response) {
-        console.log('statusChangeCallback', response)
         if (response.status == 'connected') {
           document.getElementById('login').style.display = 'none';
           getPages();
