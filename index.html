@@ -41,14 +41,15 @@
       <div id="login">
         <h2>Entra con il tuo account Facebook per vedere i post programmati</h2>
         <p class="login-container">
+          <div id="fb-root"></div>
           <span id="wait-for-fb">Caricamento pulsante...</span>
           <div class="fb-login-button" 
             data-max-rows="1" 
             data-size="large" 
             data-button-type="continue_with" 
+            data-use-continue-as="true"
             data-show-faces="false" 
             data-auto-logout-link="false" 
-            data-use-continue-as="true"
             data-onlogin="statusChangeCallback"></div>
         </p>
         <p id="message"></p>
@@ -84,6 +85,7 @@
 
 
       function statusChangeCallback(response) {
+        console.log('statusChangeCallback', response)
         if (response.status == 'connected') {
           document.getElementById('login').style.display = 'none';
           getPages();
@@ -148,7 +150,7 @@
         state.posts = [];
 
         FB.api(
-          '/' + pageId + '/promotable_posts',
+          '/' + pageId + '/scheduled_posts',
           params, 
           receivedPosts);
       }
@@ -178,6 +180,7 @@
         var availableSlots = getAvailableSlots(fromDate, toDate, scheduledSlots);
         var allSlots = posts
           .concat(availableSlots)
+          .filter(function (p) { return !!p.scheduled_publish_time; })
           .sort(function(s1, s2) { 
             return s1.scheduled_publish_time - s2.scheduled_publish_time ||
               (s1.id < s2.id ? -1 :
@@ -191,14 +194,14 @@
               '<table class="posts"><tbody>' +
               allSlots
               .map(function (post, i, posts) {
-                var scheduledDate = new Date(post.scheduled_publish_time * 1000);
+                var scheduledDate = post.scheduled_publish_time ? new Date(post.scheduled_publish_time * 1000) : null;
                 var labelDate = formatDate(scheduledDate);
                 var creator = post.admin_creator;
                 var dateH = '';
                 var isAvailable = !post.id;
 
                 if (labelDate !== lastDate) {
-                  dateH = '<tr><th colspan="2">' + labelDate + '</th></tr>';
+                  dateH = '<tr><th colspan="2" data-scheduled-publish-time="' + post.scheduled_publish_time + '">' + labelDate + '</th></tr>';
                   lastDate = labelDate;
                 }
 
@@ -210,7 +213,7 @@
                       '<div class="post-text-content">' + 
                         (isAvailable ? 'Disponibile per pubblicazione' : 
                           (post.picture ? '<img class="post-picture" src="' + post.picture + '">' : '') +
-                          '<span class="post-author">' + (creator && creator.name) + '</span><br>' +
+                          '<span class="post-author">' + ((creator && creator.name) || '') + '</span><br>' +
                           '<label for="post-' + post.id + '">' + (post.message || '<i>---</i>').replace(/\n/g, '<br>') + '</label>'
                         ) +
                       '</div>' +
@@ -288,10 +291,14 @@
       }
 
       function formatDate(date) {
+        if (!date)
+          return 'Data sconosciuta';
         return date.getDate() + '/' + (date.getMonth() + 1) + '/' + date.getFullYear();
       }
 
       function formatTime(date) {
+        if (!date)
+          return '--:--';
         return pad(date.getHours()) + ':' + pad(date.getMinutes());
       }
 
@@ -349,7 +356,7 @@
           version    : 'v3.0'
         });
 
-        //checkLoginState();
+        checkLoginState();
       };
     </script>
     <div id="fb-root"></div>
